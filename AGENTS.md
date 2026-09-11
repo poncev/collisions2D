@@ -4,7 +4,7 @@
 
 To implement a 2D version of the algorithm in the paper
 "Efficient and Robust Octree Generation for Implementing Topological Queries for Building Information Models".
-A symbolic link to the paper is allocated in the @workspace, "refs/Link to 2012_Daum_*" file.
+The paper is allocated in the @workspace, "refs/2012_Daum_*" file.
 
 ## Particular objectives
 
