@@ -148,7 +148,8 @@ static PyObject* py_version(PyObject* /* self */, PyObject* /* args */) {
 }
 
 static PyMethodDef module_methods[] = {
-    {"multiscale_rasterization", (PyCFunction)py_multiscale_rasterization,
+    {"multiscale_rasterization",
+     (PyCFunction)(void (*)(void))py_multiscale_rasterization,
      METH_VARARGS | METH_KEYWORDS,
      "Rasterize a 2D polyline at multiple scales."},
     {"version", py_version, METH_NOARGS, "Return the module version."},
@@ -161,6 +162,10 @@ static PyModuleDef module_def = {
     "C++ core for multiscale rasterization.",
     -1,
     module_methods,
+    nullptr,  // m_slots
+    nullptr,  // m_traverse
+    nullptr,  // m_clear
+    nullptr,  // m_free
 };
 
 PyMODINIT_FUNC PyInit__core(void) {

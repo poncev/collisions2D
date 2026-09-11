@@ -3,6 +3,15 @@
 This package exposes a Python-friendly wrapper around the C++ core. The heavy
 computation happens in C++ (compiled as a CPython extension); this module only
 validates inputs and converts between Python and C++ data structures.
+
+Public API
+----------
+multiscale_rasterization
+    Rasterize a polyline at multiple scales.
+RasterizedObject
+    Container for the squares touching the polyline and its interior.
+__version__
+    The package version as a string (e.g. ``"0.1.0"``).
 """
 
 from ._core import multiscale_rasterization as _multiscale_rasterization
@@ -10,7 +19,8 @@ from ._core import version as _version
 
 __all__ = ["multiscale_rasterization", "RasterizedObject", "__version__"]
 
-__version__ = _version
+# `_version` is the C++ `version()` function; call it to obtain the string.
+__version__ = _version()
 
 
 class RasterizedObject:

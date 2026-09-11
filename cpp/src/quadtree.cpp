@@ -10,32 +10,9 @@ namespace multiscale_rasterization {
 
 namespace {
 
-/// Returns true if `value` is within `[lo, hi]` (inclusive).
-bool in_range(double value, double lo, double hi) {
-    return value >= lo && value <= hi;
-}
-
-/// Returns true if the point `p` lies inside (or on the boundary of) `box`.
-bool point_in_box(const Point& p, const BoundingBox& box) {
-    return in_range(p.x, box.min.x, box.max.x) &&
-           in_range(p.y, box.min.y, box.max.y);
-}
-
-/// Returns the index of the child of `node` that contains `p`.
-///
-/// `p` is assumed to lie within `node.bounds`. The child is chosen by which
-/// half of the node's extent contains the point.
-int child_containing(const QuadtreeNode& node, const Point& p) {
-    const double mid_x = (node.bounds.min.x + node.bounds.max.x) / 2.0;
-    const double mid_y = (node.bounds.min.y + node.bounds.max.y) / 2.0;
-    const int xbit = (p.x >= mid_x) ? 1 : 0;
-    const int ybit = (p.y >= mid_y) ? 1 : 0;
-    return child_index(xbit, ybit);
-}
-
 /// Returns the index of the child of `node` that lies in the direction
 /// `(dx, dy)` (each of `dx`, `dy` is -1, 0 or +1).
-int child_in_direction(const QuadtreeNode& node, int dx, int dy) {
+int child_in_direction(int dx, int dy) {
     const int xbit = (dx > 0) ? 1 : 0;
     const int ybit = (dy > 0) ? 1 : 0;
     return child_index(xbit, ybit);
@@ -91,8 +68,7 @@ int find_neighbor(const Quadtree& tree, int index, int dx, int dy) {
     if (parent == -1) {
         return -1;  // The stopping node is the root; no sibling exists.
     }
-    const QuadtreeNode& p = tree.nodes[static_cast<size_t>(parent)];
-    const int sibling = child_in_direction(p, dx, dy);
+    const int sibling = child_in_direction(dx, dy);
     if (sibling == -1) {
         return -1;
     }

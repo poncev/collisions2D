@@ -1,5 +1,3 @@
-#pragma once
-
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -53,6 +51,34 @@ int main() {
         const auto result =
             multiscale_rasterization::multiscale_rasterization(empty, box, 2);
         check(result.corners.empty(), "degenerate polyline yields nothing");
+    }
+
+    // A negative max_level yields no squares.
+    {
+        const auto result =
+            multiscale_rasterization::multiscale_rasterization(polyline, box, -1);
+        check(result.corners.empty(), "negative max_level yields nothing");
+    }
+
+    // A closed square polygon: the interior is flooded, so the result must
+    // include the boundary cells and the interior cells.
+    {
+        const std::vector<multiscale_rasterization::Point> square = {
+            {2.0, 2.0}, {8.0, 2.0}, {8.0, 8.0}, {2.0, 8.0}, {2.0, 2.0}};
+        const auto result =
+            multiscale_rasterization::multiscale_rasterization(square, box, 2);
+        // The boundary and interior must be non-empty.
+        check(!result.corners.empty(), "closed polygon yields squares");
+        // All squares must lie within the bounding box.
+        for (const auto& corner : result.corners) {
+            check(corner.x >= 0.0 && corner.x <= 10.0 &&
+                      corner.y >= 0.0 && corner.y <= 10.0,
+                  "all squares lie within the bounding box");
+        }
+        // Levels must be within [0, max_level].
+        for (const int level : result.levels) {
+            check(level >= 0 && level <= 2, "levels within [0, max_level]");
+        }
     }
 
     if (failures == 0) {
