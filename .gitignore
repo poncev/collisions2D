@@ -1,1 +1,13 @@
 refs/
+.vscode/
+.env
+archive/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.so
+cpp/build/
