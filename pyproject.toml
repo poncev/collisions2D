@@ -1,0 +1,26 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "setuptools>=68"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "multiscale-rasterization"
+version = "0.1.0"
+description = "2D multiscale rasterization of polylines (quadtree-based), C++ core with a Python wrapper"
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[tool.scikit-build]
+cmake.version = ">=3.16"
+cmake.args = ["-DMR_BUILD_TESTS=OFF"]
+# The C++ core lives in the cpp/ directory; the Python package in python/.
+cmake.source-dir = "cpp"
+wheel.packages = ["python/multiscale_rasterization"]
+# Build the extension module in place so it is importable from the package.
+wheel.py-api = "cp38"
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+MR_BUILD_TESTS = "OFF"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
