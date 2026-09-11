@@ -1,7 +1,7 @@
 ---
 name: orchestrator
 description: Primary planner of the project
-model: OpenAI: GPT-4o (openrouter)
+model: Anthropic: Claude Sonnet 4 (openrouter)
 tools: [vscode/memory, vscode/askQuestions, read/readFile, read/getTaskOutput, agent, edit/editFiles, web, browser, vscodeTasks/getTaskOutput, todo]
 agents: ['*']
 ---

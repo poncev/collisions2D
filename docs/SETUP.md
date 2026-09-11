@@ -70,7 +70,10 @@ pytest tests/
 ```
 
 This runs the Python smoke tests, which exercise the full
-Python -> C++ -> Python pipeline.
+Python -> C++ -> Python pipeline. They cover the public API surface: the
+`__version__` attribute, the `RasterizedObject` container, input validation
+(degenerate polylines, invalid bounding boxes, negative `max_level`), and
+numpy array inputs.
 
 ## 4. Building and testing the C++ core standalone
 
