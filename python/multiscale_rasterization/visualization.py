@@ -1,19 +1,17 @@
 """Matplotlib visualization for multiscale rasterization results.
 
-This module renders a polyline/curve together with the quadtree cells produced
-by :func:`multiscale_rasterization.multiscale_rasterization`. It is designed
-for engineering documentation and debugging.
+This module renders the quadtree cells produced by
+:func:`multiscale_rasterization.multiscale_rasterization` onto matplotlib axes.
+It is designed for engineering documentation and debugging.
 
-The rasterization is first converted into the format-neutral intermediate
-representation defined in :mod:`multiscale_rasterization.scene`
-(:class:`~multiscale_rasterization.Curve2D`, ``Layer``, ``Scene``); this module
-only maps that representation onto matplotlib artists. Keeping the two apart
-means an SVG/DXF/IGES exporter can reuse the same IR without touching any
-plotting code.
+Primary function
+----------------
+render_rasterization
+    Render a ``RasterizedObject`` directly onto a matplotlib ``Axes``.
+    This is the recommended user-facing API.
 
 Default styling
 ---------------
-* the input polyline is drawn in **red**;
 * **boundary** cells (the paper's "Gray" cells) are filled **gray** with an
   **orange** wireframe, so they read as wireframe rectangles;
 * **interior** cells (the paper's "Black" cells) are filled **black** with a
@@ -21,12 +19,14 @@ Default styling
 * with ``color_by_level`` (the default) the face opacity ramps from coarse to
   fine cells, so the quadtree depth is visible at a glance.
 
-Public functions
-----------------
+Legacy functions (kept for backwards compatibility)
+---------------------------------------------------
 plot_rasterization
     Draw a curve and its rasterization onto a matplotlib ``Axes``.
+    (Legacy: use ``render_rasterization()`` instead)
 plot_scene
     Draw a pre-built intermediate-representation ``Scene``.
+    (Legacy: use ``render_rasterization()`` instead)
 save_rasterization
     Render to a file (PNG, SVG, PDF, ...), inferring the format from the
     file extension.
@@ -43,11 +43,13 @@ actionable :class:`ImportError` when matplotlib is missing.
 
 Examples
 --------
->>> from multiscale_rasterization import Curve, plot_rasterization
->>> curve = Curve.rectangle(0.0, 0.0, 10.0, 10.0, name="box")
->>> ax = plot_rasterization(curve, (0.0, 0.0, 10.0, 10.0), max_level=4)
->>> save_rasterization(curve, (0.0, 0.0, 10.0, 10.0), max_level=4,
-...                    path="box.svg")
+>>> import matplotlib.pyplot as plt
+>>> from multiscale_rasterization import multiscale_rasterization, render_rasterization
+>>> polyline = [(0, 0), (10, 10), (20, 0)]
+>>> result = multiscale_rasterization(polyline, (0, 0, 20, 20), max_level=3)
+>>> fig, ax = plt.subplots()
+>>> render_rasterization(result, ax)
+>>> plt.show()
 """
 
 from __future__ import annotations
@@ -67,11 +69,13 @@ from .scene import (
 )
 
 __all__ = [
+    "render_rasterization",
+    "HAVE_MATPLOTLIB",
+    # Legacy functions kept for backwards compatibility:
     "plot_rasterization",
     "plot_scene",
     "save_rasterization",
     "plot_gallery",
-    "HAVE_MATPLOTLIB",
 ]
 
 # --------------------------------------------------------------------------- #
@@ -461,6 +465,150 @@ def _style_axes(ax, title):
 # --------------------------------------------------------------------------- #
 # Public API
 # --------------------------------------------------------------------------- #
+
+def render_rasterization(rasterized_object, output, **kwargs):
+    """Render a RasterizedObject onto a matplotlib axis.
+
+    This is the primary user-facing visualization function. It draws a
+    rasterization result (output from :func:`multiscale_rasterization`) 
+    directly onto a provided matplotlib axis.
+
+    Parameters
+    ----------
+    rasterized_object : RasterizedObject
+        The rasterization result to render. Must contain valid corners, sizes,
+        levels, and kinds attributes.
+    output : matplotlib.axes.Axes
+        The matplotlib axis to draw on. Must be a valid Axes object.
+    **kwargs : optional
+        Additional styling options:
+        - title : str, optional
+            Axis title. Default: auto-generated from cell counts and levels.
+        - show_boundary : bool
+            Draw boundary cells. Default: True.
+        - show_interior : bool
+            Draw interior cells. Default: True.
+        - color_by_level : bool
+            Ramp opacity by quadtree level. Default: True.
+        - boundary_alpha : float
+            Face opacity for boundary cells. Default: 0.5.
+        - interior_alpha : float
+            Face opacity for interior cells. Default: 0.5.
+        - linewidth : float
+            Edge width of cell polygons. Default: 0.8.
+        - legend : bool
+            Draw legend. Default: True.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The output axis (same as the input).
+
+    Raises
+    ------
+    TypeError
+        If rasterized_object is not a RasterizedObject or output is not valid.
+    ImportError
+        If matplotlib is not installed.
+
+    Examples
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> from multiscale_rasterization import multiscale_rasterization, Curve
+    >>> fig, ax = plt.subplots()
+    >>> polyline = [(0, 0), (10, 10), (20, 0)]
+    >>> result = multiscale_rasterization(polyline, (0, 0, 20, 20), max_level=3)
+    >>> render_rasterization(result, ax)
+    >>> plt.show()
+    """
+    from . import RasterizedObject
+
+    _, plt, _, _ = _require_matplotlib()
+
+    # Validate inputs
+    if not isinstance(rasterized_object, RasterizedObject):
+        raise TypeError(
+            f"rasterized_object must be a RasterizedObject, "
+            f"got {type(rasterized_object).__name__}"
+        )
+    if not hasattr(output, "add_patch"):
+        raise TypeError(
+            f"output must be a matplotlib Axes, got {type(output).__name__}"
+        )
+
+    # Convert RasterizedObject to Scene for rendering
+    scene = scene_from_rasterized(rasterized_object)
+
+    # Extract styling options
+    title = kwargs.get("title")
+    show_boundary = kwargs.get("show_boundary", True)
+    show_interior = kwargs.get("show_interior", True)
+    show_bounding_box = kwargs.get("show_bounding_box", False)
+    show_curve = kwargs.get("show_curve", False)
+    color_by_level = kwargs.get("color_by_level", True)
+    boundary_alpha = kwargs.get("boundary_alpha", _FACE_ALPHA)
+    interior_alpha = kwargs.get("interior_alpha", _FACE_ALPHA)
+    linewidth = kwargs.get("linewidth", 0.8)
+    curve_linewidth = kwargs.get("curve_linewidth", 1.8)
+    legend = kwargs.get("legend", True)
+
+    # Draw bounding box if requested
+    bounds = scene.bounds()
+    if show_bounding_box and bounds is not None:
+        _draw_bounding_box(output, bounds, linewidth=linewidth)
+
+    # Draw cells
+    handles = _draw_cells(
+        output,
+        scene,
+        show_boundary=show_boundary,
+        show_interior=show_interior,
+        color_by_level=color_by_level,
+        boundary_alpha=boundary_alpha,
+        interior_alpha=interior_alpha,
+        linewidth=linewidth,
+        label_prefix="",
+    )
+
+    # Draw curve if present in scene
+    curve_drawn = False
+    if show_curve:
+        curve_drawn = _draw_scene_curve(output, scene, linewidth=curve_linewidth)
+
+    # Set axis limits from bounds
+    if bounds is not None:
+        output.set_xlim(bounds[0], bounds[2])
+        output.set_ylim(bounds[1], bounds[3])
+    output.set_aspect("equal")
+
+    # Set title
+    if title is None:
+        levels = scene.levels()
+        counts = scene.counts()
+        n_cells = counts.get(LAYER_BOUNDARY, 0) + counts.get(LAYER_INTERIOR, 0)
+        title = f"Multiscale rasterization ({n_cells} cells, levels {levels})"
+    _style_axes(output, title)
+
+    # Add legend if requested
+    if legend:
+        line_handles = [
+            artist
+            for artist in output.get_lines()
+            if artist.get_label() and not artist.get_label().startswith("_")
+        ]
+        combined = handles + line_handles
+        if combined:
+            output.legend(
+                handles=combined,
+                loc="upper left",
+                bbox_to_anchor=(1.01, 1.0),
+                frameon=False,
+                fontsize=8,
+                borderaxespad=0.0,
+            )
+
+    return output
+
 
 def plot_rasterization(
     polyline,

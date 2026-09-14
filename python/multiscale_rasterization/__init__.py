@@ -12,21 +12,16 @@ RasterizedObject
     Container for the squares touching the polyline and its interior.
 Curve
     Input-geometry representation (vertices + closure metadata).
-Curve2D
-    Internal 2D primitive of the format-neutral intermediate representation;
-    models both geometry and rasterized cells.
-Layer, Scene
-    Intermediate-representation containers (named curve groups / document).
-scene_from_rasterized, scene_from_curve
-    Converters into the intermediate representation.
+render_rasterization
+    Draw a RasterizedObject onto a matplotlib axis (primary visualization method).
 plot_rasterization
-    Matplotlib visualization of a curve and its rasterization.
+    Legacy: Matplotlib visualization of a curve and its rasterization.
 plot_scene
-    Matplotlib visualization of an intermediate-representation ``Scene``.
+    Legacy: Matplotlib visualization of cached intermediate representations.
 save_rasterization
-    Render a rasterization to an image file.
+    Legacy: Render a rasterization to an image file.
 plot_gallery
-    Draw several curves and their rasterizations in a grid of subplots.
+    Legacy: Draw several curves and their rasterizations in a grid of subplots.
 main
     Entry point of the standalone ``python -m multiscale_rasterization`` CLI.
 __version__
@@ -37,16 +32,17 @@ from ._core import multiscale_rasterization as _multiscale_rasterization
 from ._core import version as _version
 from .curve import Curve
 from .scene import (
-    Curve2D,
-    Layer,
-    Scene,
-    scene_from_curve,
-    scene_from_rasterized,
+    Curve2D,  # Internal: for tests and internal use only
+    Layer,  # Internal: for tests and internal use only
+    Scene,  # Internal: for tests and internal use only
+    scene_from_curve,  # Internal: for tests and internal use only
+    scene_from_rasterized,  # Internal: for tests and internal use only
 )
 from .visualization import (
     plot_gallery,
     plot_rasterization,
     plot_scene,
+    render_rasterization,
     save_rasterization,
 )
 
@@ -54,11 +50,7 @@ __all__ = [
     "multiscale_rasterization",
     "RasterizedObject",
     "Curve",
-    "Curve2D",
-    "Layer",
-    "Scene",
-    "scene_from_curve",
-    "scene_from_rasterized",
+    "render_rasterization",
     "plot_rasterization",
     "plot_scene",
     "save_rasterization",
