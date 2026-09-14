@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from typing import Iterable, Iterator, Sequence
 
-__all__ = ["Curve", "segment_intersects_box"]
+__all__ = ["Curve"]
 
 Point = tuple[float, float]
 BoundingBox = tuple[float, float, float, float]
@@ -47,54 +47,6 @@ def _coerce_point(value: object, index: int) -> Point:
             f"vertex {index} must have finite coordinates, got {value!r}"
         )
     return (x, y)
-
-
-def segment_intersects_box(
-    a: Point, b: Point, box: BoundingBox
-) -> bool:
-    """Liang--Barsky clip test: does segment ``a``--``b`` hit ``box``?
-
-    This mirrors the C++ ``liang_barsky_intersect`` used by the core, so the
-    Python-side classification of cells agrees with the rasterizer. The
-    segment is parameterised as ``p(t) = a + t * (b - a)`` with ``t`` in
-    ``[0, 1]`` and the parameter interval is clipped against the four
-    half-planes that define the box. A non-empty interval means an
-    intersection (touching an edge or a corner counts).
-    """
-    xmin, ymin, xmax, ymax = box
-    ax, ay = a
-    bx, by = b
-
-    dx = bx - ax
-    dy = by - ay
-
-    tmin = 0.0
-    tmax = 1.0
-
-    p = (-dx, dx, -dy, dy)
-    q = (ax - xmin, xmax - ax, ay - ymin, ymax - ay)
-
-    for pi, qi in zip(p, q):
-        if pi == 0.0:
-            # Segment is parallel to this boundary; it must lie inside.
-            if qi < 0.0:
-                return False
-        else:
-            r = qi / pi
-            if pi < 0.0:
-                # Entering the region.
-                if r > tmax:
-                    return False
-                if r > tmin:
-                    tmin = r
-            else:
-                # Leaving the region.
-                if r < tmin:
-                    return False
-                if r < tmax:
-                    tmax = r
-
-    return True
 
 
 class Curve:
