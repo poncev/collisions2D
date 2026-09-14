@@ -68,9 +68,16 @@ int find_neighbor(const Quadtree& tree, int index, int dx, int dy) {
     if (parent == -1) {
         return -1;  // The stopping node is the root; no sibling exists.
     }
-    const int sibling = child_in_direction(dx, dy);
-    if (sibling == -1) {
+    const int sibling_slot = child_in_direction(dx, dy);
+    if (sibling_slot == -1) {
         return -1;
+    }
+
+    // Get the actual sibling node index from the parent's children array
+    const QuadtreeNode& parent_node = tree.nodes[static_cast<size_t>(parent)];
+    const int sibling = parent_node.children[sibling_slot];
+    if (sibling == -1) {
+        return -1;  // Sibling doesn't exist
     }
 
     // Descend from the sibling, mirroring the recorded locations. The path is
