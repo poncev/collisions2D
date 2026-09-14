@@ -1,26 +1,28 @@
-"""Tests for the format-neutral intermediate representation (``scene``) and the
-matplotlib visualization module.
+"""Tests for the visualization module and the Curve representation.
 
-The tests are split into two groups:
+The tests are split into three groups:
 
-* IR tests (no matplotlib required) cover ``Curve2D``, ``Layer``, ``Scene``,
-  the converters and the JSON round trip.
-* Rendering tests exercise the matplotlib code paths and are skipped when
-  matplotlib is unavailable, so the suite still passes in a lean, headless
-  environment (mirroring the module's soft-dependency contract).
+* Curve tests (no matplotlib required) cover the geometry container that users
+  build polylines with.
+* IR tests (no matplotlib required) cover ``Curve2D``, ``Layer`` and ``Scene``.
+  The scene IR is *internal*: it is no longer part of the public API, so these
+  tests import it from the module directly.
+* Rendering tests exercise ``render_rasterization`` and are skipped when
+  matplotlib is unavailable, mirroring the module's soft-dependency contract.
 """
-
-import json
 
 import pytest
 
 from multiscale_rasterization import (
-    Curve,
+    RasterizedObject,
+    multiscale_rasterization,
+)
+
+# The scene IR is internal-only now; import it straight from the module.
+from multiscale_rasterization.scene import (
     Curve2D,
     Layer,
-    RasterizedObject,
     Scene,
-    multiscale_rasterization,
     scene_from_curve,
     scene_from_rasterized,
 )
@@ -53,6 +55,8 @@ def test_from_polyline_detects_closure():
 
 
 def test_from_curve_preserves_metadata():
+    from multiscale_rasterization import Curve
+
     curve = Curve.rectangle(0.0, 0.0, 4.0, 4.0, name="box")
     primitive = Curve2D.from_curve(curve)
     assert primitive.is_closed
@@ -81,8 +85,14 @@ def test_curve2d_equality_and_hashing():
 
 
 # --------------------------------------------------------------------------- #
-# Layer / Scene
+# Layer / Scene (internal)
 # --------------------------------------------------------------------------- #
+
+def test_layer_rejects_non_curve2d():
+    layer = Layer(name="a")
+    with pytest.raises(TypeError):
+        layer.add("not a curve")
+
 
 def test_scene_layers_are_created_on_demand_and_ordered():
     scene = Scene()
@@ -117,6 +127,8 @@ def test_scene_bounds_derived_from_primitives():
 
 
 def test_scene_json_round_trip_is_lossless():
+    from multiscale_rasterization import Curve
+
     curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="box")
     result = multiscale_rasterization(curve, BBOX, 3)
     scene = scene_from_rasterized(result, curve=curve, bounding_box=BBOX)
@@ -135,7 +147,7 @@ def test_scene_json_round_trip_is_lossless():
 
 
 # --------------------------------------------------------------------------- #
-# Converters
+# Converters (internal)
 # --------------------------------------------------------------------------- #
 
 def test_scene_from_rasterized_splits_kinds_into_layers():
@@ -152,6 +164,8 @@ def test_scene_from_rasterized_splits_kinds_into_layers():
 
 
 def test_scene_from_rasterized_includes_curve_layer():
+    from multiscale_rasterization import Curve
+
     result = multiscale_rasterization(Curve.rectangle(2, 2, 8, 8), BBOX, 2)
     curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="box")
     scene = scene_from_rasterized(result, curve=curve, bounding_box=BBOX)
@@ -168,6 +182,8 @@ def test_scene_from_rasterized_rejects_unknown_kind():
 
 
 def test_scene_from_curve_wraps_geometry():
+    from multiscale_rasterization import Curve
+
     scene = scene_from_curve(Curve([(0, 0), (1, 0), (1, 1)], closed=True, name="tri"))
     assert scene.name == "tri"
     (primitive,) = list(scene.iter_curves())
@@ -183,12 +199,7 @@ mpl = pytest.importorskip("matplotlib")
 mpl.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from multiscale_rasterization import (  # noqa: E402
-    plot_gallery,
-    plot_rasterization,
-    plot_scene,
-    save_rasterization,
-)
+from multiscale_rasterization import render_rasterization  # noqa: E402
 from multiscale_rasterization import visualization  # noqa: E402
 
 
@@ -198,119 +209,98 @@ def test_matplotlib_is_optional_but_detected():
     assert visualization.HAVE_MATPLOTLIB is True
 
 
-def test_plot_rasterization_draws_cells_and_red_curve():
-    curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="box")
-    ax = plot_rasterization(curve, BBOX, 3)
+def test_render_rasterization_draws_cells():
+    from multiscale_rasterization import Curve
+
+    result = multiscale_rasterization(Curve.rectangle(2.0, 2.0, 8.0, 8.0), BBOX, 3)
+    fig, ax = plt.subplots()
     try:
+        returned = render_rasterization(result, ax)
+        assert returned is ax
         assert len(ax.collections) >= 1
-        colors = {line.get_color() for line in ax.get_lines()}
-        assert visualization.POLYLINE_COLOR in colors
         labels = [t.get_text() for t in ax.get_legend().get_texts()]
-        assert any("boundary" in label for label in labels)
-        assert any("interior" in label for label in labels)
-    finally:
-        plt.close(ax.figure)
-
-
-def test_boundary_cells_use_gray_fill_and_orange_edge():
-    curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0)
-    ax = plot_rasterization(
-        curve, BBOX, 3, color_by_level=False, show_interior=False
-    )
-    try:
-        (collection,) = ax.collections
-        assert tuple(collection.get_facecolor()[0][:3]) == pytest.approx(
-            _rgb(visualization.BOUNDARY_FILL_COLOR)
-        )
-        assert tuple(collection.get_edgecolor()[0][:3]) == pytest.approx(
-            _rgb(visualization.BOUNDARY_EDGE_COLOR)
-        )
-    finally:
-        plt.close(ax.figure)
-
-
-def test_interior_cells_use_black_fill_and_blue_edge():
-    curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0)
-    ax = plot_rasterization(
-        curve, BBOX, 3, color_by_level=False, show_boundary=False
-    )
-    try:
-        (collection,) = ax.collections
-        assert tuple(collection.get_facecolor()[0][:3]) == pytest.approx(
-            _rgb(visualization.INTERIOR_FILL_COLOR)
-        )
-        assert tuple(collection.get_edgecolor()[0][:3]) == pytest.approx(
-            _rgb(visualization.INTERIOR_EDGE_COLOR)
-        )
-    finally:
-        plt.close(ax.figure)
-
-
-def test_color_by_level_ramps_opacity_coarse_to_fine():
-    curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0)
-    ax = plot_rasterization(curve, BBOX, 4, color_by_level=True)
-    try:
-        # Collections are added coarse-to-fine; opacity must be non-decreasing.
-        alphas = [c.get_alpha() for c in ax.collections]
-        assert alphas == sorted(alphas)
-    finally:
-        plt.close(ax.figure)
-
-
-def test_plot_scene_accepts_ir_and_rejects_other_types():
-    result = multiscale_rasterization(Curve.rectangle(2, 2, 8, 8), BBOX, 2)
-    scene = scene_from_rasterized(result, bounding_box=BBOX)
-    ax = plot_scene(scene)
-    try:
-        assert len(ax.collections) >= 1
-    finally:
-        plt.close(ax.figure)
-
-    with pytest.raises(TypeError):
-        plot_scene("not a scene")
-
-
-def test_save_rasterization_writes_a_file(tmp_path):
-    curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="box")
-    target = tmp_path / "box.png"
-    written = save_rasterization(curve, BBOX, 3, path=target)
-    assert written == target
-    assert target.is_file() and target.stat().st_size > 0
-
-
-def test_save_rasterization_requires_a_format(tmp_path):
-    curve = Curve.rectangle(2.0, 2.0, 8.0, 8.0)
-    with pytest.raises(ValueError):
-        save_rasterization(curve, BBOX, 2, path=tmp_path / "noextension")
-
-
-def test_plot_gallery_builds_a_grid():
-    curves = [
-        Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="square"),
-        Curve([(1, 1), (9, 1), (5, 8)], closed=True, name="triangle"),
-    ]
-    fig, axes = plot_gallery(curves, BBOX, 3, ncols=2)
-    try:
-        assert axes.shape == (1, 2)
+        assert any("Boundary" in label for label in labels)
+        assert any("Interior" in label for label in labels)
     finally:
         plt.close(fig)
 
 
-# Tests for Curve serialization and transformations
-# (These methods are public API and deserve test coverage)
+def test_render_rasterization_rejects_bad_input():
+    from multiscale_rasterization import Curve
 
+    result = multiscale_rasterization(Curve.rectangle(2.0, 2.0, 8.0, 8.0), BBOX, 2)
+    fig, ax = plt.subplots()
+    try:
+        with pytest.raises(TypeError):
+            render_rasterization("not a rasterized object", ax)
+        with pytest.raises(TypeError):
+            render_rasterization(result, "not an axis")
+    finally:
+        plt.close(fig)
+
+
+def test_render_rasterization_show_toggles():
+    from multiscale_rasterization import Curve
+
+    result = multiscale_rasterization(Curve.rectangle(2.0, 2.0, 8.0, 8.0), BBOX, 3)
+
+    fig, ax = plt.subplots()
+    try:
+        render_rasterization(result, ax, show_interior=False)
+        (collection,) = ax.collections
+        assert "Boundary" in collection.get_label()
+    finally:
+        plt.close(fig)
+
+    fig, ax = plt.subplots()
+    try:
+        render_rasterization(result, ax, show_boundary=False)
+        (collection,) = ax.collections
+        assert "Interior" in collection.get_label()
+    finally:
+        plt.close(fig)
+
+
+def test_render_rasterization_color_by_level_ramps_opacity():
+    from multiscale_rasterization import Curve
+
+    result = multiscale_rasterization(Curve.rectangle(2.0, 2.0, 8.0, 8.0), BBOX, 4)
+    fig, ax = plt.subplots()
+    try:
+        render_rasterization(result, ax, color_by_level=True, show_interior=False)
+        (collection,) = ax.collections
+        # Cell kinds are drawn as single collections; alpha is per-face.
+        alphas = [rgba[3] for rgba in collection.get_facecolor()]
+        assert alphas == sorted(alphas)
+    finally:
+        plt.close(fig)
+
+
+def test_render_rasterization_handles_empty_result():
+    result = multiscale_rasterization([(1.0, 1.0)], BBOX, 2)  # degenerate → empty
+    fig, ax = plt.subplots()
+    try:
+        render_rasterization(result, ax)  # must not raise
+        assert len(ax.collections) == 0
+    finally:
+        plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# Curve serialization and transformations
+# --------------------------------------------------------------------------- #
 
 def test_curve_to_dict_and_from_dict_round_trip():
-    """Verify Curve.to_dict() / from_dict() preserve all data."""
+    from multiscale_rasterization import Curve
+
     original = Curve([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)],
                      closed=True, name="test_curve")
-    
+
     d = original.to_dict()
-    # to_dict stores vertices as lists, not tuples
     assert [tuple(v) for v in d["vertices"]] == [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]
     assert d["closed"] is True
     assert d["name"] == "test_curve"
-    
+
     restored = Curve.from_dict(d)
     assert restored.vertices == original.vertices
     assert restored.closed == original.closed
@@ -318,13 +308,14 @@ def test_curve_to_dict_and_from_dict_round_trip():
 
 
 def test_curve_to_json_and_from_json_round_trip():
-    """Verify Curve.to_json() / from_json() preserve all data via JSON."""
+    from multiscale_rasterization import Curve
+
     original = Curve.rectangle(1.0, 2.0, 9.0, 8.0, name="rect_json")
-    
+
     json_str = original.to_json()
     assert isinstance(json_str, str)
     assert "rect_json" in json_str
-    
+
     restored = Curve.from_json(json_str)
     assert restored.vertices == original.vertices
     assert restored.closed == original.closed
@@ -332,32 +323,33 @@ def test_curve_to_json_and_from_json_round_trip():
 
 
 def test_curve_to_geojson_format():
-    """Verify Curve.to_geojson() produces valid GeoJSON structure."""
+    from multiscale_rasterization import Curve
+
     curve = Curve([(1.0, 2.0), (3.0, 4.0)], closed=True, name="geo")
-    
+
     geojson = curve.to_geojson()
     assert geojson["type"] == "Feature"
-    # Closed curves are represented as Polygon in GeoJSON
     assert geojson["geometry"]["type"] in ("Polygon", "LineString", "LinearRing")
     assert geojson["properties"]["name"] == "geo"
     assert geojson["properties"]["closed"] is True
 
 
 def test_curve_translated_returns_new_curve_with_offset():
-    """Verify Curve.translated() applies the offset correctly."""
+    from multiscale_rasterization import Curve
+
     original = Curve([(1.0, 2.0), (3.0, 4.0)], name="orig")
-    
+
     translated = original.translated(10.0, 20.0)
-    # Vertices are tuples of tuples
     assert translated.vertices == ((11.0, 22.0), (13.0, 24.0))
     assert translated.closed == original.closed
     assert translated.name == original.name  # Preserve name
 
 
 def test_curve_scaled_returns_new_curve_with_scale():
-    """Verify Curve.scaled() applies the scale factor correctly."""
+    from multiscale_rasterization import Curve
+
     original = Curve([(2.0, 4.0), (4.0, 6.0)], name="orig")
-    
+
     scaled = original.scaled(2.0, origin=(0.0, 0.0))
     assert scaled.vertices == ((4.0, 8.0), (8.0, 12.0))
     assert scaled.closed == original.closed
@@ -365,9 +357,10 @@ def test_curve_scaled_returns_new_curve_with_scale():
 
 
 def test_curve_indexing_via_getitem():
-    """Verify Curve.__getitem__ allows vertex access by index."""
+    from multiscale_rasterization import Curve
+
     curve = Curve([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])
-    
+
     assert curve[0] == (1.0, 2.0)
     assert curve[1] == (3.0, 4.0)
     assert curve[2] == (5.0, 6.0)
@@ -375,13 +368,7 @@ def test_curve_indexing_via_getitem():
 
 
 def test_curve_length_via_len():
-    """Verify len(Curve) returns vertex count."""
+    from multiscale_rasterization import Curve
+
     curve = Curve([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])
     assert len(curve) == 3
-
-
-def _rgb(hex_color):
-    """Converts ``"#rrggbb"`` to a ``(r, g, b)`` triple in the 0..1 range."""
-    import matplotlib.colors as mcolors
-
-    return mcolors.to_rgb(hex_color)

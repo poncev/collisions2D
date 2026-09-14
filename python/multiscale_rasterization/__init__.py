@@ -1,8 +1,16 @@
 """Multiscale rasterization of 2D polylines.
 
-This package exposes a Python-friendly wrapper around the C++ core. The heavy
-computation happens in C++ (compiled as a CPython extension); this module only
-validates inputs and converts between Python and C++ data structures.
+This is a minimal, internal-use library. It exposes a Python-friendly wrapper
+around the C++ core: the heavy computation happens in C++ (compiled as a CPython
+extension) and this module only validates inputs and converts between Python and
+C++ data structures.
+
+The whole workflow is two calls: rasterize a polyline, then render the result.
+
+>>> from multiscale_rasterization import (
+...     multiscale_rasterization, render_rasterization,
+... )
+>>> result = multiscale_rasterization([(0, 0), (10, 10)], (0, 0, 10, 10), 3)
 
 Public API
 ----------
@@ -11,19 +19,11 @@ multiscale_rasterization
 RasterizedObject
     Container for the squares touching the polyline and its interior.
 Curve
-    Input-geometry representation (vertices + closure metadata).
+    Optional input-geometry representation (vertices + closure metadata).
 render_rasterization
-    Draw a RasterizedObject onto a matplotlib axis (primary visualization method).
-plot_rasterization
-    Legacy: Matplotlib visualization of a curve and its rasterization.
-plot_scene
-    Legacy: Matplotlib visualization of cached intermediate representations.
-save_rasterization
-    Legacy: Render a rasterization to an image file.
-plot_gallery
-    Legacy: Draw several curves and their rasterizations in a grid of subplots.
-main
-    Entry point of the standalone ``python -m multiscale_rasterization`` CLI.
+    Draw a RasterizedObject onto a matplotlib axis.
+BOUNDARY, INTERIOR
+    The two cell-kind labels used in ``RasterizedObject.kinds``.
 __version__
     The package version as a string (e.g. ``"0.1.0"``).
 """
@@ -31,31 +31,16 @@ __version__
 from ._core import multiscale_rasterization as _multiscale_rasterization
 from ._core import version as _version
 from .curve import Curve
-from .scene import (
-    Curve2D,  # Internal: for tests and internal use only
-    Layer,  # Internal: for tests and internal use only
-    Scene,  # Internal: for tests and internal use only
-    scene_from_curve,  # Internal: for tests and internal use only
-    scene_from_rasterized,  # Internal: for tests and internal use only
-)
-from .visualization import (
-    plot_gallery,
-    plot_rasterization,
-    plot_scene,
-    render_rasterization,
-    save_rasterization,
-)
+from .visualization import HAVE_MATPLOTLIB, render_rasterization
 
 __all__ = [
     "multiscale_rasterization",
     "RasterizedObject",
     "Curve",
     "render_rasterization",
-    "plot_rasterization",
-    "plot_scene",
-    "save_rasterization",
-    "plot_gallery",
-    "main",
+    "HAVE_MATPLOTLIB",
+    "BOUNDARY",
+    "INTERIOR",
     "__version__",
 ]
 
@@ -210,19 +195,4 @@ def multiscale_rasterization(polyline, bounding_box, max_level):
         polyline, bounding_box, max_level
     )
     return RasterizedObject(corners, sizes, levels, kinds)
-
-
-def __getattr__(name):
-    """Lazily exposes the CLI entry point without importing it eagerly.
-
-    ``main`` lives in :mod:`multiscale_rasterization.cli`, which pulls in
-    :mod:`argparse`. Importing it on demand keeps ``import
-    multiscale_rasterization`` lightweight for callers that only need the
-    rasterizer or the plotting helpers.
-    """
-    if name == "main":
-        from .cli import main
-
-        return main
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

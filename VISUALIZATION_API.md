@@ -43,12 +43,6 @@ render_rasterization(rasterized_object, output, **kwargs) -> matplotlib.axes.Axe
 - **show_interior** (bool, default=True)
   - Draw interior cells (black with blue edges)
 
-- **show_curve** (bool, default=False)
-  - Overlay the original polyline in red (requires curve in Scene)
-
-- **show_bounding_box** (bool, default=False)
-  - Draw dashed bounding box
-
 - **color_by_level** (bool, default=True)
   - Ramp cell opacity by quadtree depth (coarse=opaque, fine=transparent)
 
@@ -132,12 +126,9 @@ This is the **only recommended visualization method** as of v0.2.0. The signatur
 - **Black fill + blue edges**: Interior cells
 - **Opacity**: Ramps from coarse (opaque) to fine (transparent) when `color_by_level=True`
 
-## Legacy Functions
+## Minimal API
 
-For backwards compatibility, these functions remain available but are not recommended:
-- `plot_rasterization()` — Compute rasterization and plot in one call
-- `plot_scene()` — Plot intermediate Scene representation
-- `save_rasterization()` — Render to file
-- `plot_gallery()` — Create multi-panel grid
-
-Use `render_rasterization()` instead.
+`render_rasterization()` is the **only** visualization function. The former
+`plot_rasterization()`, `plot_scene()`, `save_rasterization()` and
+`plot_gallery()` helpers — and the CLI they backed — have been removed. This is
+an internal-use library: build the figure and axis you want and pass the axis in.

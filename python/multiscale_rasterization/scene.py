@@ -1,8 +1,14 @@
 """Format-neutral 2D intermediate representation (IR) for rasterization.
 
+.. note::
+   This module is **internal**. It is not exported from the package's public
+   API (see :mod:`multiscale_rasterization`); the public workflow is simply
+   :func:`multiscale_rasterization` followed by
+   :func:`~multiscale_rasterization.render_rasterization`. The IR is kept for
+   internal tooling and tests only.
+
 This module defines the canonical *intermediate representation* (IR) that
-sits between the rasterizer and any consumer (matplotlib today; SVG, DXF or
-IGES exporters later). The design has three layers:
+sits between the rasterizer and any consumer. The design has three layers:
 
 ``Curve2D``
     A single 2D primitive: an ordered sequence of ``(x, y)`` vertices plus a
@@ -38,7 +44,7 @@ it is safe to import anywhere (including headless CI) and cheap to depend on.
 
 Examples
 --------
->>> from multiscale_rasterization import Curve2D
+>>> from multiscale_rasterization.scene import Curve2D
 >>> cell = Curve2D.cell((0.0, 0.0), 5.0, kind="boundary", level=2)
 >>> cell.kind, cell.level, cell.is_closed
 ('boundary', 2, True)
