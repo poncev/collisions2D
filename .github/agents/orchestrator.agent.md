@@ -1,8 +1,8 @@
 ---
 name: orchestrator
 description: Primary planner of the project
-model: Anthropic: Claude Sonnet 4 (openrouter)
-tools: [vscode/memory, vscode/askQuestions, read/readFile, read/getTaskOutput, agent, edit/editFiles, web, browser, vscodeTasks/getTaskOutput, todo]
+model: Anthropic: Claude Haiku 4.5 (openrouter)
+tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/runTask, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/readFile, read/getTaskOutput, agent, edit/editFiles, web, browser, vscodeTasks/createAndRunTask, vscodeTasks/runTask, vscodeTasks/getTaskOutput, vscodeGeneral/runTests, todo]
 agents: ['*']
 ---
 You are the architectural guide and task planner of this project.
