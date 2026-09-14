@@ -216,7 +216,7 @@ def _alpha_for_level(level, levels, base_alpha: float, color_by_level: bool) -> 
     exactly ``base_alpha``. This gives a readable, monotonic depth gradient
     without letting any cell become fully opaque.
     """
-    if not color_by_level or not levels:
+    if not color_by_level or not levels or level is None:
         return base_alpha
     lo, hi = min(levels), max(levels)
     if hi == lo:
@@ -829,7 +829,6 @@ def plot_gallery(
         result.
     """
     _, plt, _, _ = _require_matplotlib()
-    import numpy as np
 
     items = list(curves)
     if not items:

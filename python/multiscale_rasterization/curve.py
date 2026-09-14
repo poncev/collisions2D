@@ -326,7 +326,7 @@ class Curve:
     def __iter__(self) -> Iterator[Point]:
         return iter(self._vertices)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Point:
         return self._vertices[index]
 
     def __eq__(self, other: object) -> bool:
