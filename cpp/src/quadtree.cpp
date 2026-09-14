@@ -3,101 +3,15 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <queue>
 #include <utility>
 
 namespace multiscale_rasterization {
 
 namespace {
 
-/// Returns the index of the child of `node` that lies in the direction
-/// `(dx, dy)` (each of `dx`, `dy` is -1, 0 or +1).
-int child_in_direction(int dx, int dy) {
-    const int xbit = (dx > 0) ? 1 : 0;
-    const int ybit = (dy > 0) ? 1 : 0;
-    return child_index(xbit, ybit);
-}
-
 /// Returns true if the node at `index` is a leaf (has no children).
 bool is_leaf(const Quadtree& tree, int index) {
     return tree.nodes[static_cast<size_t>(index)].children[0] == -1;
-}
-
-/// Returns the index of the neighbor of the node at `index` in the direction
-/// `(dx, dy)`, or -1 if there is no such neighbor.
-///
-/// This follows the paper's bit-encoding traversal. We climb towards the root
-/// while the node's location bit in the queried axis equals the "far" bit
-/// (i.e. the node is on the boundary of its parent in that direction),
-/// recording each location. When we reach a node whose bit equals the "near"
-/// bit, its sibling in the queried direction is the neighbor's ancestor; we
-/// then descend from that sibling, mirroring the recorded locations.
-int find_neighbor(const Quadtree& tree, int index, int dx, int dy) {
-    if (dx == 0 && dy == 0) {
-        return -1;
-    }
-
-    // Only axis-aligned directions are used by the flood fill.
-    const int axis = (dx != 0) ? 0 : 1;  // 0 = x, 1 = y
-    const int dir = (dx != 0) ? dx : dy; // +1 or -1
-    const int far_bit = (dir > 0) ? 1 : 0;
-    const int near_bit = (dir > 0) ? 0 : 1;
-
-    // Climb, recording each node's location in its parent, until the location
-    // bit in the queried axis equals the near bit.
-    std::vector<int> path;
-    int current = index;
-    while (current != -1) {
-        const QuadtreeNode& node = tree.nodes[static_cast<size_t>(current)];
-        const int bit = (axis == 0) ? node.xbit : node.ybit;
-        if (bit != far_bit) {
-            break;  // Found the stopping node (bit == near_bit).
-        }
-        path.push_back(child_index(node.xbit, node.ybit));
-        current = node.parent;
-    }
-
-    if (current == -1) {
-        return -1;  // Reached the root without finding a neighbor.
-    }
-
-    // `current` is the stopping node; its sibling in the queried direction is
-    // the ancestor of the neighbor.
-    const QuadtreeNode& stopping = tree.nodes[static_cast<size_t>(current)];
-    const int parent = stopping.parent;
-    if (parent == -1) {
-        return -1;  // The stopping node is the root; no sibling exists.
-    }
-    const int sibling_slot = child_in_direction(dx, dy);
-    if (sibling_slot == -1) {
-        return -1;
-    }
-
-    // Get the actual sibling node index from the parent's children array
-    const QuadtreeNode& parent_node = tree.nodes[static_cast<size_t>(parent)];
-    const int sibling = parent_node.children[sibling_slot];
-    if (sibling == -1) {
-        return -1;  // Sibling doesn't exist
-    }
-
-    // Descend from the sibling, mirroring the recorded locations. The path is
-    // bottom-up (leaf first), so iterate it in reverse (top-down). At each
-    // step the child adjacent to the direction has the near bit on the queried
-    // axis and the recorded bits on the other axes.
-    int result = sibling;
-    for (auto it = path.rbegin(); it != path.rend(); ++it) {
-        const QuadtreeNode& r = tree.nodes[static_cast<size_t>(result)];
-        if (r.children[0] == -1) {
-            break;
-        }
-        const int entry = *it;
-        const int entry_xbit = entry & 1;
-        const int entry_ybit = (entry >> 1) & 1;
-        const int child_xbit = (axis == 0) ? near_bit : entry_xbit;
-        const int child_ybit = (axis == 1) ? near_bit : entry_ybit;
-        result = r.children[child_index(child_xbit, child_ybit)];
-    }
-    return result;
 }
 
 /// Returns true if the point `p` is strictly inside the closed polygon
@@ -133,6 +47,111 @@ bool point_in_polygon(const Point& p, const Polyline& polyline) {
         }
     }
     return inside;
+}
+
+/// Cardinal direction of an axis-aligned neighbor lookup.
+enum class Direction { Right = 0, Left = 1, Up = 2, Down = 3 };
+
+/// Returns the leaf cell adjacent to `index` in direction `dir`, or -1 if no
+/// undetermined neighbor exists in that direction.
+///
+/// The traversal uses only the parent pointers and the stored `xbit`/`ybit`
+/// location bits, so it is O(depth) and needs no extra spatial index. It
+/// climbs from `index` until the current node has a sibling in `dir`, steps
+/// into that sibling, then descends replaying (and mirroring) the climb to
+/// find the adjacent cell at `index`'s level.
+///
+/// A same-level adjacent cell that is subdivided is necessarily a Gray
+/// boundary node (only boundary nodes are refined by `build_boundary`), so it
+/// cannot contain an undetermined leaf: the lookup returns -1 and the fill
+/// treats the boundary as a barrier. When the adjacent footprint is covered by
+/// a coarser leaf, that coarser leaf is returned.
+int find_neighbor(const Quadtree& tree, int index, Direction dir) {
+    if (index < 0) {
+        return -1;
+    }
+    const int target_level = tree.nodes[static_cast<size_t>(index)].level;
+
+    // Location bits of the nodes traversed while climbing, from `index`
+    // upwards. They are replayed, mirrored, when descending into the sibling.
+    std::vector<std::pair<int, int>> path;
+    int current = index;
+
+    while (true) {
+        const QuadtreeNode& node = tree.nodes[static_cast<size_t>(current)];
+        const int parent = node.parent;
+        if (parent == -1) {
+            return -1;  // Reached the root without finding a sibling.
+        }
+
+        int sibling_xbit = node.xbit;
+        int sibling_ybit = node.ybit;
+        bool can_move = false;
+        switch (dir) {
+            case Direction::Right:
+                can_move = (node.xbit == 0);
+                sibling_xbit = 1;
+                break;
+            case Direction::Left:
+                can_move = (node.xbit == 1);
+                sibling_xbit = 0;
+                break;
+            case Direction::Up:
+                can_move = (node.ybit == 0);
+                sibling_ybit = 1;
+                break;
+            case Direction::Down:
+                can_move = (node.ybit == 1);
+                sibling_ybit = 0;
+                break;
+        }
+
+        if (!can_move) {
+            // The node sits on the `dir` side of its parent: climb.
+            path.emplace_back(node.xbit, node.ybit);
+            current = parent;
+            continue;
+        }
+
+        const int sibling =
+            tree.nodes[static_cast<size_t>(parent)]
+                .children[child_index(sibling_xbit, sibling_ybit)];
+        if (sibling == -1) {
+            return -1;
+        }
+
+        // Descend into the sibling, mirroring the climb across the shared
+        // edge. Mirroring flips the location bit along the movement axis.
+        int cell = sibling;
+        for (auto it = path.rbegin(); it != path.rend(); ++it) {
+            if (tree.nodes[static_cast<size_t>(cell)].level == target_level) {
+                break;
+            }
+            if (is_leaf(tree, cell)) {
+                return cell;  // Coarser neighbor covering the adjacent cell.
+            }
+            int xbit = it->first;
+            int ybit = it->second;
+            if (dir == Direction::Right || dir == Direction::Left) {
+                xbit = 1 - xbit;
+            } else {
+                ybit = 1 - ybit;
+            }
+            const int child =
+                tree.nodes[static_cast<size_t>(cell)]
+                    .children[child_index(xbit, ybit)];
+            if (child == -1) {
+                return -1;
+            }
+            cell = child;
+        }
+
+        if (is_leaf(tree, cell)) {
+            return cell;  // Same-level leaf neighbor.
+        }
+        // The same-level adjacent cell is subdivided, hence Gray (barrier).
+        return -1;
+    }
 }
 
 }  // namespace
@@ -255,61 +274,75 @@ void flood_fill(Quadtree& tree, const Polyline& polyline) {
         return;
     }
 
-    // Collect the leaf cells.
-    std::vector<int> leaves;
-    leaves.reserve(tree.nodes.size());
-    for (size_t i = 0; i < tree.nodes.size(); ++i) {
-        if (is_leaf(tree, static_cast<int>(i))) {
-            leaves.push_back(static_cast<int>(i));
-        }
-    }
-
-    // Find a seed: an undetermined leaf that is inside the polygon. If none
-    // exists, there is nothing to flood.
+    // Phase 1: pick a single undetermined leaf as the seed. Only this one
+    // leaf is tested against the polygon: its center is classified with an
+    // even-odd ray cast, and that single test decides whether the free region
+    // reachable from the seed is the interior or the exterior. Gray boundary
+    // cells are skipped so the seed always comes from the free region.
     int seed = -1;
-    for (const int leaf : leaves) {
-        const QuadtreeNode& node = tree.nodes[static_cast<size_t>(leaf)];
-        if (node.color == CellColor::Undetermined) {
-            const Point center = {(node.bounds.min.x + node.bounds.max.x) / 2.0,
-                                  (node.bounds.min.y + node.bounds.max.y) / 2.0};
-            if (point_in_polygon(center, polyline)) {
-                seed = leaf;
-                break;
-            }
+    for (size_t i = 0; i < tree.nodes.size(); ++i) {
+        const int index = static_cast<int>(i);
+        if (!is_leaf(tree, index)) {
+            continue;
         }
+        if (tree.nodes[i].color != CellColor::Undetermined) {
+            continue;
+        }
+        seed = index;
+        break;
     }
+
     if (seed == -1) {
-        return;
+        return;  // No free cell to classify.
     }
 
-    // Flood the interior (Black) from the seed, using Gray cells as a barrier.
-    std::queue<int> queue;
-    queue.push(seed);
-    tree.nodes[static_cast<size_t>(seed)].color = CellColor::Black;
+    const BoundingBox& seed_bounds = tree.nodes[static_cast<size_t>(seed)].bounds;
+    const Point seed_center = {(seed_bounds.min.x + seed_bounds.max.x) / 2.0,
+                               (seed_bounds.min.y + seed_bounds.max.y) / 2.0};
+    const bool seed_inside = point_in_polygon(seed_center, polyline);
 
-    const int directions[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    // Phase 2: flood fill the connected free region reachable from the seed,
+    // colouring it with the seed's classification: Black if the seed center is
+    // inside the polygon, White otherwise. The traversal is a stack-based
+    // flood fill whose neighbors are found through the quadtree hierarchy
+    // (`find_neighbor`), which keeps it O(cells * depth) instead of O(cells^2)
+    // and lets the fill span leaf cells of different sizes. Gray cells are
+    // barriers: they are never entered nor coloured.
+    const CellColor seed_color =
+        seed_inside ? CellColor::Black : CellColor::White;
+    tree.nodes[static_cast<size_t>(seed)].color = seed_color;
 
-    while (!queue.empty()) {
-        const int current = queue.front();
-        queue.pop();
-        for (const auto& dir : directions) {
-            const int neighbor = find_neighbor(tree, current, dir[0], dir[1]);
+    std::vector<int> stack;
+    stack.push_back(seed);
+
+    const Direction directions[4] = {Direction::Right, Direction::Left,
+                                     Direction::Up, Direction::Down};
+    while (!stack.empty()) {
+        const int index = stack.back();
+        stack.pop_back();
+        for (const Direction dir : directions) {
+            const int neighbor = find_neighbor(tree, index, dir);
             if (neighbor == -1) {
                 continue;
             }
-            QuadtreeNode& n = tree.nodes[static_cast<size_t>(neighbor)];
-            if (n.color == CellColor::Undetermined) {
-                n.color = CellColor::Black;
-                queue.push(neighbor);
+            QuadtreeNode& cell = tree.nodes[static_cast<size_t>(neighbor)];
+            if (cell.color != CellColor::Undetermined) {
+                continue;  // Already classified, or a Gray barrier.
             }
+            cell.color = seed_color;
+            stack.push_back(neighbor);
         }
     }
 
-    // Everything still undetermined is exterior (White).
-    for (size_t i = 0; i < tree.nodes.size(); ++i) {
-        QuadtreeNode& node = tree.nodes[i];
+    // Phase 3: every cell not reached by the flood fill lies on the other side
+    // of the boundary, so it is interior and marked Black. Gray boundary cells
+    // are preserved.
+    for (QuadtreeNode& node : tree.nodes) {
+        if (node.children[0] != -1) {
+            continue;  // Not a leaf.
+        }
         if (node.color == CellColor::Undetermined) {
-            node.color = CellColor::White;
+            node.color = CellColor::Black;
         }
     }
 }

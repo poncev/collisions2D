@@ -1,7 +1,7 @@
 ---
 name: orchestrator
 description: Primary planner of the project
-model: Anthropic: Claude Haiku 4.5 (openrouter)
+model: OpenAI: GPT-4o-mini (openrouter)
 tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/runTask, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/readFile, read/getTaskOutput, agent, edit/editFiles, web, browser, vscodeTasks/createAndRunTask, vscodeTasks/runTask, vscodeTasks/getTaskOutput, vscodeGeneral/runTests, todo]
 agents: ['*']
 ---
