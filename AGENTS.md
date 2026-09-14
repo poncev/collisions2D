@@ -37,6 +37,11 @@ the function with a signature similar to
 `rasterized_object` should store the coordinates of those squares in the
 multiscale hierarchy touching the polyline and its interior.
 
+Create a python function for visualization.
+It should work as a method like `render_rasterization(rasterized_object, output)`.
+The parameter `output` should a maplotlib axis
+so that the method add to this object the polyline and rasterization.
+
 It is not part of the goal to create a complete package for deployment in PyPI or similar.
 The module will be used internally for other projects.
 

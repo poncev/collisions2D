@@ -9,6 +9,13 @@ description = "2D multiscale rasterization of polylines (quadtree-based), C++ co
 requires-python = ">=3.10"
 dependencies = ["numpy"]
 
+[project.optional-dependencies]
+# matplotlib is a *soft* dependency: the core and the package import fine
+# without it. Install this extra (`pip install -e '.[viz]'`) to enable the
+# plotting helpers in multiscale_rasterization.visualization.
+viz = ["matplotlib>=3.5"]
+test = ["pytest>=7"]
+
 [tool.scikit-build]
 cmake.version = ">=3.16"
 cmake.args = ["-DMR_BUILD_TESTS=OFF"]

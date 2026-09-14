@@ -111,14 +111,17 @@ static PyObject* py_multiscale_rasterization(PyObject* /* self */,
     const mr::RasterizedObject result =
         mr::multiscale_rasterization(polyline, bbox, max_level);
 
-    // Build the three parallel lists.
+    // Build the four parallel lists.
     PyObject* corners = PyList_New(static_cast<Py_ssize_t>(result.corners.size()));
     PyObject* sizes = PyList_New(static_cast<Py_ssize_t>(result.sizes.size()));
     PyObject* levels = PyList_New(static_cast<Py_ssize_t>(result.levels.size()));
-    if (corners == nullptr || sizes == nullptr || levels == nullptr) {
+    PyObject* kinds = PyList_New(static_cast<Py_ssize_t>(result.kinds.size()));
+    if (corners == nullptr || sizes == nullptr || levels == nullptr ||
+        kinds == nullptr) {
         Py_XDECREF(corners);
         Py_XDECREF(sizes);
         Py_XDECREF(levels);
+        Py_XDECREF(kinds);
         return nullptr;
     }
 
@@ -130,12 +133,15 @@ static PyObject* py_multiscale_rasterization(PyObject* /* self */,
                         PyFloat_FromDouble(result.sizes[i]));
         PyList_SET_ITEM(levels, static_cast<Py_ssize_t>(i),
                         PyLong_FromLong(result.levels[i]));
+        PyList_SET_ITEM(kinds, static_cast<Py_ssize_t>(i),
+                        PyLong_FromLong(static_cast<long>(result.kinds[i])));
     }
 
-    PyObject* tuple = Py_BuildValue("(OOO)", corners, sizes, levels);
+    PyObject* tuple = Py_BuildValue("(OOOO)", corners, sizes, levels, kinds);
     Py_DECREF(corners);
     Py_DECREF(sizes);
     Py_DECREF(levels);
+    Py_DECREF(kinds);
     return tuple;
 }
 

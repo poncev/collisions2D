@@ -67,7 +67,8 @@ void build_boundary(Quadtree& tree, const Polyline& polyline) {
 /// `RasterizedObject`.
 ///
 /// Only Gray (boundary) and Black (interior) cells are emitted; exterior
-/// (White) and undetermined cells are excluded.
+/// (White) and undetermined cells are excluded. Each emitted cell records
+/// whether it is a boundary or an interior cell.
 RasterizedObject collect_leaves(const Quadtree& tree) {
     RasterizedObject result;
     for (const QuadtreeNode& node : tree.nodes) {
@@ -80,6 +81,9 @@ RasterizedObject collect_leaves(const Quadtree& tree) {
         result.corners.push_back(node.bounds.min);
         result.sizes.push_back(node.bounds.max.x - node.bounds.min.x);
         result.levels.push_back(node.level);
+        result.kinds.push_back(node.color == CellColor::Gray
+                                   ? CellKind::Boundary
+                                   : CellKind::Interior);
     }
     return result;
 }
