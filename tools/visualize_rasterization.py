@@ -264,8 +264,19 @@ def _render_gallery_figure(
     """Writes a single combined multi-panel figure of ``curves``."""
     import matplotlib.pyplot as plt
 
+    # Compute union bounding box so all panels use the same scale
+    if curves:
+        xs_min = min(c.bounding_box()[0] for c in curves)
+        ys_min = min(c.bounding_box()[1] for c in curves)
+        xs_max = max(c.bounding_box()[2] for c in curves)
+        ys_max = max(c.bounding_box()[3] for c in curves)
+        bbox = (xs_min, ys_min, xs_max, ys_max)
+    else:
+        bbox = None
+
     fig, _ = plot_gallery(
         curves,
+        bbox,
         max_level=args.max_level,
         ncols=args.gallery_cols,
         suptitle="Multiscale rasterization gallery",

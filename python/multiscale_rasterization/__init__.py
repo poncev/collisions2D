@@ -234,7 +234,3 @@ def __getattr__(name):
         return main
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-# The CLI is always importable (it imports matplotlib lazily), so a failure
-# here would indicate a genuine packaging problem rather than a missing
-# optional dependency.
-from .cli import main  # noqa: E402
