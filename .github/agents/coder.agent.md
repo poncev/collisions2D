@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Handles coding tasks as assigned by the orchestrator
-model: DeepSeek: DeepSeek V4 Flash 0731 (openrouter)
+model: DeepSeek: DeepSeek V4.1 Flash (openrouter)
 tools: [execute, read/problems, read/readFile, read/terminalSelection, read/terminalLastCommand, read/getTaskOutput, edit, search, browser, vscodeTasks/getTaskOutput, vscodeTasks/problems]
 ---
 You are a coder that will implement the tasks assigned by the orchestrator.
