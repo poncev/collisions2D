@@ -296,6 +296,90 @@ def test_plot_gallery_builds_a_grid():
         plt.close(fig)
 
 
+# Tests for Curve serialization and transformations
+# (These methods are public API and deserve test coverage)
+
+
+def test_curve_to_dict_and_from_dict_round_trip():
+    """Verify Curve.to_dict() / from_dict() preserve all data."""
+    original = Curve([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)],
+                     closed=True, name="test_curve")
+    
+    d = original.to_dict()
+    # to_dict stores vertices as lists, not tuples
+    assert [tuple(v) for v in d["vertices"]] == [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]
+    assert d["closed"] is True
+    assert d["name"] == "test_curve"
+    
+    restored = Curve.from_dict(d)
+    assert restored.vertices == original.vertices
+    assert restored.closed == original.closed
+    assert restored.name == original.name
+
+
+def test_curve_to_json_and_from_json_round_trip():
+    """Verify Curve.to_json() / from_json() preserve all data via JSON."""
+    original = Curve.rectangle(1.0, 2.0, 9.0, 8.0, name="rect_json")
+    
+    json_str = original.to_json()
+    assert isinstance(json_str, str)
+    assert "rect_json" in json_str
+    
+    restored = Curve.from_json(json_str)
+    assert restored.vertices == original.vertices
+    assert restored.closed == original.closed
+    assert restored.name == original.name
+
+
+def test_curve_to_geojson_format():
+    """Verify Curve.to_geojson() produces valid GeoJSON structure."""
+    curve = Curve([(1.0, 2.0), (3.0, 4.0)], closed=True, name="geo")
+    
+    geojson = curve.to_geojson()
+    assert geojson["type"] == "Feature"
+    # Closed curves are represented as Polygon in GeoJSON
+    assert geojson["geometry"]["type"] in ("Polygon", "LineString", "LinearRing")
+    assert geojson["properties"]["name"] == "geo"
+    assert geojson["properties"]["closed"] is True
+
+
+def test_curve_translated_returns_new_curve_with_offset():
+    """Verify Curve.translated() applies the offset correctly."""
+    original = Curve([(1.0, 2.0), (3.0, 4.0)], name="orig")
+    
+    translated = original.translated(10.0, 20.0)
+    # Vertices are tuples of tuples
+    assert translated.vertices == ((11.0, 22.0), (13.0, 24.0))
+    assert translated.closed == original.closed
+    assert translated.name == original.name  # Preserve name
+
+
+def test_curve_scaled_returns_new_curve_with_scale():
+    """Verify Curve.scaled() applies the scale factor correctly."""
+    original = Curve([(2.0, 4.0), (4.0, 6.0)], name="orig")
+    
+    scaled = original.scaled(2.0, origin=(0.0, 0.0))
+    assert scaled.vertices == ((4.0, 8.0), (8.0, 12.0))
+    assert scaled.closed == original.closed
+    assert scaled.name == original.name
+
+
+def test_curve_indexing_via_getitem():
+    """Verify Curve.__getitem__ allows vertex access by index."""
+    curve = Curve([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])
+    
+    assert curve[0] == (1.0, 2.0)
+    assert curve[1] == (3.0, 4.0)
+    assert curve[2] == (5.0, 6.0)
+    assert curve[-1] == (5.0, 6.0)
+
+
+def test_curve_length_via_len():
+    """Verify len(Curve) returns vertex count."""
+    curve = Curve([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])
+    assert len(curve) == 3
+
+
 def _rgb(hex_color):
     """Converts ``"#rrggbb"`` to a ``(r, g, b)`` triple in the 0..1 range."""
     import matplotlib.colors as mcolors
