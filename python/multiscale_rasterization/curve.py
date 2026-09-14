@@ -26,27 +26,9 @@ from __future__ import annotations
 import math
 from typing import Iterable, Iterator, Sequence
 
-__all__ = ["Curve"]
+from ._validation import BoundingBox, Point, coerce_point as _coerce_point
 
-Point = tuple[float, float]
-BoundingBox = tuple[float, float, float, float]
-
-
-def _coerce_point(value: object, index: int) -> Point:
-    """Converts ``value`` into a finite ``(x, y)`` pair of floats."""
-    try:
-        x, y = value  # type: ignore[misc]
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"vertex {index} must be a pair (x, y), got {value!r}"
-        ) from exc
-    x = float(x)
-    y = float(y)
-    if not (math.isfinite(x) and math.isfinite(y)):
-        raise ValueError(
-            f"vertex {index} must have finite coordinates, got {value!r}"
-        )
-    return (x, y)
+__all__ = ["Curve", "Point", "BoundingBox"]
 
 
 class Curve:

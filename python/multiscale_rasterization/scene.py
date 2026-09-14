@@ -53,6 +53,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Iterable, Iterator, Sequence
 
+from ._validation import BoundingBox, Point, coerce_point as _coerce_point
+
 __all__ = [
     "Curve2D",
     "Layer",
@@ -66,15 +68,13 @@ __all__ = [
     "LAYER_INTERIOR",
     "scene_from_curve",
     "scene_from_rasterized",
+    "Point",
+    "BoundingBox",
 ]
-
-Point = tuple[float, float]
-BoundingBox = tuple[float, float, float, float]
 
 # --------------------------------------------------------------------------- #
 # Vocabulary
 # --------------------------------------------------------------------------- #
-
 #: An open sequence of vertices (the input geometry, or its outline).
 KIND_POLYLINE = "polyline"
 #: A closed sequence of vertices with no further meaning beyond its outline.
@@ -100,23 +100,6 @@ _VALID_KINDS = frozenset(
 # --------------------------------------------------------------------------- #
 # Validation helpers
 # --------------------------------------------------------------------------- #
-
-def _coerce_point(value: object, index: int) -> Point:
-    """Converts ``value`` into a finite ``(x, y)`` pair of floats."""
-    try:
-        x, y = value  # type: ignore[misc]
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"vertex {index} must be a pair (x, y), got {value!r}"
-        ) from exc
-    x = float(x)
-    y = float(y)
-    if not (math.isfinite(x) and math.isfinite(y)):
-        raise ValueError(
-            f"vertex {index} must have finite coordinates, got {value!r}"
-        )
-    return (x, y)
-
 
 def _validate_kind(kind: str) -> str:
     """Normalises and validates a primitive kind."""
