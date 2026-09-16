@@ -29,52 +29,6 @@ def _square_curve():
     return Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="square")
 
 
-def _triangle_curve():
-    """A closed triangle."""
-    return Curve([(1.0, 1.0), (9.0, 1.0), (5.0, 8.0)], closed=True, name="triangle")
-
-
-def _hexagon_curve():
-    """A regular hexagon, radius 3, centred at (5, 5)."""
-    return Curve.regular_polygon((5.0, 5.0), 3.0, 6, name="hexagon")
-
-
-def _l_shape_curve():
-    """An L-shaped closed curve."""
-    return Curve(
-        [
-            (1.0, 1.0),
-            (6.0, 1.0),
-            (6.0, 4.0),
-            (4.0, 4.0),
-            (4.0, 7.0),
-            (1.0, 7.0),
-        ],
-        closed=True,
-        name="l-shape",
-    )
-
-
-def _circle_curve():
-    """A circle approximated by a 16-gon, radius 2.5, centred at (5, 5)."""
-    return Curve.circle((5.0, 5.0), 2.5, n=16, name="circle")
-
-
-def _example_curves():
-    """Returns ``(name, Curve)`` pairs for every Jordan-curve example.
-
-    The order matches the numerical tests below so that the examples are easy
-    to relate back to the assertions.
-    """
-    return [
-        ("Square", _square_curve()),
-        ("Triangle", _triangle_curve()),
-        ("Hexagon", _hexagon_curve()),
-        ("L-shape", _l_shape_curve()),
-        ("Circle approximation", _circle_curve()),
-    ]
-
-
 def square_figure(max_level=3):
     """Builds a matplotlib figure for the example square.
 
