@@ -29,52 +29,6 @@ def _square_curve():
     return Curve.rectangle(2.0, 2.0, 8.0, 8.0, name="square")
 
 
-def _triangle_curve():
-    """A closed triangle."""
-    return Curve([(1.0, 1.0), (9.0, 1.0), (5.0, 8.0)], closed=True, name="triangle")
-
-
-def _hexagon_curve():
-    """A regular hexagon, radius 3, centred at (5, 5)."""
-    return Curve.regular_polygon((5.0, 5.0), 3.0, 6, name="hexagon")
-
-
-def _l_shape_curve():
-    """An L-shaped closed curve."""
-    return Curve(
-        [
-            (1.0, 1.0),
-            (6.0, 1.0),
-            (6.0, 4.0),
-            (4.0, 4.0),
-            (4.0, 7.0),
-            (1.0, 7.0),
-        ],
-        closed=True,
-        name="l-shape",
-    )
-
-
-def _circle_curve():
-    """A circle approximated by a 16-gon, radius 2.5, centred at (5, 5)."""
-    return Curve.circle((5.0, 5.0), 2.5, n=16, name="circle")
-
-
-def _example_curves():
-    """Returns ``(name, Curve)`` pairs for every Jordan-curve example.
-
-    The order matches the numerical tests below so that the examples are easy
-    to relate back to the assertions.
-    """
-    return [
-        ("Square", _square_curve()),
-        ("Triangle", _triangle_curve()),
-        ("Hexagon", _hexagon_curve()),
-        ("L-shape", _l_shape_curve()),
-        ("Circle approximation", _circle_curve()),
-    ]
-
-
 def square_figure(max_level=3):
     """Builds a matplotlib figure for the example square.
 
@@ -111,6 +65,97 @@ def test_square():
     print(f"  Levels: {sorted(set(result.levels))}")
     print(f"  Expected: Square interior + boundary should give reasonable cell count")
     return len(result.corners) > 10  # Should have significant interior
+
+
+# Expected rasterization of the off-grid square (2.7, 2.7)-(7.7, 7.7) at
+# max_level=3, as ``(corner, size, kind)`` triples. The square's edges fall
+# strictly inside level-3 cells (size 1.25), so the boundary is refined to
+# level 3. The interior is covered by five level-3 cells plus a single level-2
+# cell (size 2.5) in the top-right corner: that coarser cell is what makes the
+# result genuinely multiscale rather than a uniform grid.
+_OFF_GRID_SQUARE_EXPECTED = [
+    # Boundary cells (level 3).
+    ((2.5, 2.5), 1.25, "boundary"),
+    ((2.5, 3.75), 1.25, "boundary"),
+    ((2.5, 5.0), 1.25, "boundary"),
+    ((2.5, 6.25), 1.25, "boundary"),
+    ((2.5, 7.5), 1.25, "boundary"),
+    ((7.5, 2.5), 1.25, "boundary"),
+    ((7.5, 3.75), 1.25, "boundary"),
+    ((7.5, 5.0), 1.25, "boundary"),
+    ((7.5, 6.25), 1.25, "boundary"),
+    ((7.5, 7.5), 1.25, "boundary"),
+    ((3.75, 2.5), 1.25, "boundary"),
+    ((5.0, 2.5), 1.25, "boundary"),
+    ((6.25, 2.5), 1.25, "boundary"),
+    ((3.75, 7.5), 1.25, "boundary"),
+    ((5.0, 7.5), 1.25, "boundary"),
+    ((6.25, 7.5), 1.25, "boundary"),
+    # Interior cells (level 3, except the level-2 cell in the top-right).
+    ((3.75, 3.75), 1.25, "interior"),
+    ((3.75, 5.0), 1.25, "interior"),
+    ((3.75, 6.25), 1.25, "interior"),
+    ((5.0, 3.75), 1.25, "interior"),
+    ((6.25, 3.75), 1.25, "interior"),
+    ((5.0, 5.0), 2.5, "interior"),
+]
+
+
+def test_square_off_grid():
+    """Test a square whose edges do not align with the quadtree grid.
+
+    The square (2.7, 2.7)-(7.7, 7.7) is deliberately offset from the grid so
+    that the boundary is refined to level 3 while the interior keeps a coarser
+    level-2 cell in its top-right corner. Unlike the other Jordan-curve tests,
+    this one pins the exact multiscale decomposition (see
+    ``_OFF_GRID_SQUARE_EXPECTED``) instead of only checking a cell count.
+    """
+    polyline = [(2.7, 2.7), (7.7, 2.7), (7.7, 7.7), (2.7, 7.7), (2.7, 2.7)]
+    bbox = BBOX
+    max_level = 3
+
+    result = multiscale_rasterization(polyline, bbox, max_level)
+
+    expected = _OFF_GRID_SQUARE_EXPECTED
+    expected_corners = [corner for corner, _, _ in expected]
+    expected_sizes = [size for _, size, _ in expected]
+    expected_kinds = [kind for _, _, kind in expected]
+
+    print(f"\nOff-grid square test:")
+    print(f"  Square (2.7,2.7)-(7.7,7.7) at max_level={max_level}")
+    print(f"  Cells found: {len(result.corners)} (expected {len(expected)})")
+    print(f"  Levels: {sorted(set(result.levels))}")
+
+    # The four parallel lists must always agree in length.
+    assert (
+        len(result.corners)
+        == len(result.sizes)
+        == len(result.levels)
+        == len(result.kinds)
+    ), "corners, sizes, levels and kinds must be parallel lists"
+
+    # Cheap checks first: a length or kind-count mismatch is a definite error.
+    assert len(result.corners) == len(expected_corners), (
+        "number of corners does not match"
+    )
+    assert result.kinds.count("boundary") == expected_kinds.count("boundary"), (
+        "number of boundary cells does not match"
+    )
+    assert result.kinds.count("interior") == expected_kinds.count("interior"), (
+        "number of interior cells does not match"
+    )
+    assert result.sizes.count(2.5) == expected_sizes.count(2.5), (
+        "number of level-2 cells does not match"
+    )
+
+    # Strong check: the cells must coincide up to reordering. The core does not
+    # promise an order, so compare the sorted (corner, size, kind) triples.
+    actual = sorted(zip(result.corners, result.sizes, result.kinds))
+    assert actual == sorted(expected), (
+        "rasterized cells do not match the expected multiscale decomposition"
+    )
+
+    return True
 
 
 def test_triangle():
@@ -204,6 +249,7 @@ def run_all_tests():
 
     tests = [
         ("Square", test_square),
+        ("Off-grid square", test_square_off_grid),
         ("Triangle", test_triangle),
         ("Hexagon", test_hexagon),
         ("L-shape", test_l_shape),
