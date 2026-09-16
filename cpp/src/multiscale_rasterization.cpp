@@ -101,6 +101,9 @@ RasterizedObject multiscale_rasterization(
     Quadtree tree = initialize_quadtree(bounding_box, max_level);
     seed_root(tree, polyline);
     build_boundary(tree, polyline);
+    // Cross-link the leaf cells (paper, Section 4.2) so the flood fill can
+    // transfer information between adjacent cells in O(1) per link.
+    cross_link_leaves(tree);
     flood_fill(tree, polyline);
     return collect_leaves(tree);
 }
