@@ -12,6 +12,12 @@ namespace multiscale_rasterization {
 /// A polyline: an ordered sequence of vertices connected by straight edges.
 using Polyline = std::vector<Point>;
 
+/// Number of axis-aligned neighbor directions (see `Direction` in quadtree.cpp).
+///
+/// The flood fill only steps along shared edges, never diagonally, so the four
+/// cardinal directions suffice and no diagonal leak is possible.
+constexpr int kNumDirections = 4;
+
 /// Color of a quadtree cell, following the paper's tri-color scheme.
 ///
 /// The boundary of the geometry is rasterized first (Gray cells). The
@@ -50,6 +56,24 @@ struct QuadtreeNode {
     /// still intersect it, so only potentially intersecting edges are tested
     /// against a node (as in the paper's triangle-index list).
     std::vector<int> candidate_edges;
+
+    /// Cross-links to the distinct adjacent leaf cells, in direction order
+    /// (Right, Left, Up, Down). An empty list means there is no leaf neighbor
+    /// in that direction.
+    ///
+    /// Filled once by `cross_link_leaves` after the boundary phase (paper,
+    /// Section 4.2: "adjacent cells can be stored in a list structure in each
+    /// cell"). The flood fill reads these links instead of re-running the
+    /// hierarchical `find_neighbors` traversal at every step, which turns the
+    /// fill into O(number of cells) neighbour lookups.
+    ///
+    /// A list — rather than a single index — is required because the octree is
+    /// deliberately *not* smoothed (the paper drops Crouse's smoothing step).
+    /// An adjacent cell can therefore be finer than this one, in which case
+    /// several of its leaves touch this cell's edge along the same direction
+    /// and all of them are neighbours. Conversely a coarser adjacent leaf
+    /// appears as the single entry of the list.
+    std::array<std::vector<int>, kNumDirections> neighbors;
 };
 
 /// A quadtree over a bounding box.
@@ -74,6 +98,19 @@ Quadtree initialize_quadtree(const BoundingBox& box, int max_level);
 /// Liang--Barsky clip test: does the segment `a`--`b` intersect the square
 /// `box`?
 ///
+
+/// Cross-links every leaf cell with its distinct axis-aligned leaf neighbors.
+///
+/// This is the paper's Section 4.2 optimization ("Cross-linking of leaf cells"):
+/// each leaf stores the indices of the leaves adjacent to it in the four
+/// cardinal directions, so the flooding algorithm can transfer information
+/// between neighbors in O(1) per link instead of re-traversing the tree.
+///
+/// Each direction stores a *list* because the octree is not level-smoothed: a
+/// leaf may be adjacent to several finer leaves along one edge (or to a single
+/// coarser leaf). `find_neighbors` collects every leaf whose footprint shares
+/// an edge with the queried cell.
+void cross_link_leaves(Quadtree& tree);
 /// The segment is parameterised as `p(t) = a + t * (b - a)` with `t` in
 /// [0, 1] and the parameter interval is clipped against the four half-planes
 /// that define the square. A non-empty interval means an intersection.
