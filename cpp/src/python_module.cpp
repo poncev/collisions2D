@@ -16,6 +16,19 @@ namespace mr = multiscale_rasterization;
 // Helpers
 // ---------------------------------------------------------------------------
 
+// `PyMethodDef.ml_meth` is typed as `PyCFunction`, but a function registered
+// with `METH_VARARGS | METH_KEYWORDS` actually has the
+// `PyCFunctionWithKeywords` signature. The C API therefore requires a cast
+// between incompatible function-pointer types. Prefer CPython's official
+// `PyCFunction_CAST` macro (Python 3.13+) and fall back to a single explicit
+// `reinterpret_cast`; both are clearer and less fragile than the traditional
+// double C-style cast `(PyCFunction)(void (*)(void))`.
+#if defined(PyCFunction_CAST)
+#define MR_PY_CFUNCTION_CAST(func) PyCFunction_CAST(func)
+#else
+#define MR_PY_CFUNCTION_CAST(func) reinterpret_cast<PyCFunction>(func)
+#endif
+
 /// Parses a Python sequence of (x, y) pairs into a vector of C++ points.
 /// Returns false (and sets a Python exception) on failure.
 static bool parse_polyline(PyObject* obj, std::vector<mr::Point>* out) {
@@ -128,13 +141,28 @@ static PyObject* py_multiscale_rasterization(PyObject* /* self */,
     for (size_t i = 0; i < result.corners.size(); ++i) {
         PyObject* corner = Py_BuildValue("(dd)", result.corners[i].x,
                                          result.corners[i].y);
+        PyObject* size = PyFloat_FromDouble(result.sizes[i]);
+        PyObject* level = PyLong_FromLong(result.levels[i]);
+        PyObject* kind = PyLong_FromLong(static_cast<long>(result.kinds[i]));
+        if (corner == nullptr || size == nullptr || level == nullptr ||
+            kind == nullptr) {
+            // A failed allocation leaves the corresponding list slot unset;
+            // release whatever was built and bail out before PyList_SET_ITEM
+            // would store a null pointer (which would crash on dealloc).
+            Py_XDECREF(corner);
+            Py_XDECREF(size);
+            Py_XDECREF(level);
+            Py_XDECREF(kind);
+            Py_DECREF(corners);
+            Py_DECREF(sizes);
+            Py_DECREF(levels);
+            Py_DECREF(kinds);
+            return nullptr;
+        }
         PyList_SET_ITEM(corners, static_cast<Py_ssize_t>(i), corner);
-        PyList_SET_ITEM(sizes, static_cast<Py_ssize_t>(i),
-                        PyFloat_FromDouble(result.sizes[i]));
-        PyList_SET_ITEM(levels, static_cast<Py_ssize_t>(i),
-                        PyLong_FromLong(result.levels[i]));
-        PyList_SET_ITEM(kinds, static_cast<Py_ssize_t>(i),
-                        PyLong_FromLong(static_cast<long>(result.kinds[i])));
+        PyList_SET_ITEM(sizes, static_cast<Py_ssize_t>(i), size);
+        PyList_SET_ITEM(levels, static_cast<Py_ssize_t>(i), level);
+        PyList_SET_ITEM(kinds, static_cast<Py_ssize_t>(i), kind);
     }
 
     PyObject* tuple = Py_BuildValue("(OOOO)", corners, sizes, levels, kinds);
@@ -142,6 +170,9 @@ static PyObject* py_multiscale_rasterization(PyObject* /* self */,
     Py_DECREF(sizes);
     Py_DECREF(levels);
     Py_DECREF(kinds);
+    if (tuple == nullptr) {
+        return nullptr;  // Py_BuildValue already set the exception.
+    }
     return tuple;
 }
 
@@ -155,7 +186,7 @@ static PyObject* py_version(PyObject* /* self */, PyObject* /* args */) {
 
 static PyMethodDef module_methods[] = {
     {"multiscale_rasterization",
-     (PyCFunction)(void (*)(void))py_multiscale_rasterization,
+     MR_PY_CFUNCTION_CAST(py_multiscale_rasterization),
      METH_VARARGS | METH_KEYWORDS,
      "Rasterize a 2D polyline at multiple scales."},
     {"version", py_version, METH_NOARGS, "Return the module version."},

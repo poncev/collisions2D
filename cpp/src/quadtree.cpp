@@ -1,8 +1,6 @@
 #include "multiscale_rasterization/quadtree.h"
 
-#include <algorithm>
 #include <cmath>
-#include <limits>
 #include <utility>
 
 namespace multiscale_rasterization {
